@@ -1,3 +1,6 @@
+import { drizzle } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
+import { eq, and } from "drizzle-orm";
 import { 
   users, perfumes, recommendations, wishlist, chatMessages, preferenceTests,
   type User, type InsertUser, type Perfume, type InsertPerfume,
@@ -39,40 +42,199 @@ export interface IStorage {
   getPreferenceTestByUserId(userId: number): Promise<PreferenceTest | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private perfumes: Map<number, Perfume>;
-  private recommendations: Map<number, Recommendation>;
-  private wishlistItems: Map<number, Wishlist>;
-  private chatMessages: Map<number, ChatMessage>;
-  private preferenceTests: Map<number, PreferenceTest>;
-  private currentUserId: number;
-  private currentPerfumeId: number;
-  private currentRecommendationId: number;
-  private currentWishlistId: number;
-  private currentChatId: number;
-  private currentTestId: number;
+export class SupabaseStorage implements IStorage {
+  private db: ReturnType<typeof drizzle>;
 
   constructor() {
-    this.users = new Map();
-    this.perfumes = new Map();
-    this.recommendations = new Map();
-    this.wishlistItems = new Map();
-    this.chatMessages = new Map();
-    this.preferenceTests = new Map();
-    this.currentUserId = 1;
-    this.currentPerfumeId = 1;
-    this.currentRecommendationId = 1;
-    this.currentWishlistId = 1;
-    this.currentChatId = 1;
-    this.currentTestId = 1;
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL is required for Supabase connection");
+    }
+    const sql = neon(process.env.DATABASE_URL);
+    this.db = drizzle(sql);
+  }
 
-    // Initialize with some sample perfumes
+  // User operations
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await this.db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async getUserById(id: number): Promise<User | undefined> {
+    const [user] = await this.db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await this.db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async updateUserPreferences(id: number, preferences: any): Promise<User | undefined> {
+    const [user] = await this.db
+      .update(users)
+      .set({ preferences })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  // Perfume operations
+  async createPerfume(insertPerfume: InsertPerfume): Promise<Perfume> {
+    const [perfume] = await this.db.insert(perfumes).values(insertPerfume).returning();
+    return perfume;
+  }
+
+  async getAllPerfumes(): Promise<Perfume[]> {
+    return await this.db.select().from(perfumes);
+  }
+
+  async getPerfumeById(id: number): Promise<Perfume | undefined> {
+    const [perfume] = await this.db.select().from(perfumes).where(eq(perfumes.id, id));
+    return perfume;
+  }
+
+  async updatePerfumeViews(id: number): Promise<void> {
+    const perfume = await this.getPerfumeById(id);
+    if (perfume) {
+      await this.db
+        .update(perfumes)
+        .set({ views: (perfume.views || 0) + 1 })
+        .where(eq(perfumes.id, id));
+    }
+  }
+
+  // Recommendation operations
+  async createRecommendation(insertRecommendation: InsertRecommendation): Promise<Recommendation> {
+    const [recommendation] = await this.db
+      .insert(recommendations)
+      .values(insertRecommendation)
+      .returning();
+    return recommendation;
+  }
+
+  async getRecommendationsByUserId(userId: number): Promise<Recommendation[]> {
+    return await this.db
+      .select()
+      .from(recommendations)
+      .where(eq(recommendations.userId, userId));
+  }
+
+  async getRecommendationsWithPerfumes(userId: number): Promise<any[]> {
+    const recs = await this.db
+      .select()
+      .from(recommendations)
+      .where(eq(recommendations.userId, userId));
+    
+    const recsWithPerfumes = await Promise.all(recs.map(async (rec) => {
+      const perfume = rec.perfumeId ? await this.getPerfumeById(rec.perfumeId) : null;
+      return { ...rec, perfume };
+    }));
+    
+    return recsWithPerfumes;
+  }
+
+  // Wishlist operations
+  async addToWishlist(insertWishlist: InsertWishlist): Promise<Wishlist> {
+    const [wishlistItem] = await this.db
+      .insert(wishlist)
+      .values(insertWishlist)
+      .returning();
+    return wishlistItem;
+  }
+
+  async removeFromWishlist(userId: number, perfumeId: number): Promise<boolean> {
+    const result = await this.db
+      .delete(wishlist)
+      .where(and(eq(wishlist.userId, userId), eq(wishlist.perfumeId, perfumeId)));
+    return result.rowCount > 0;
+  }
+
+  async getWishlistByUserId(userId: number): Promise<Wishlist[]> {
+    return await this.db
+      .select()
+      .from(wishlist)
+      .where(eq(wishlist.userId, userId));
+  }
+
+  async getWishlistWithPerfumes(userId: number): Promise<any[]> {
+    const wishlistItems = await this.db
+      .select()
+      .from(wishlist)
+      .where(eq(wishlist.userId, userId));
+    
+    const wishlistWithPerfumes = await Promise.all(wishlistItems.map(async (item) => {
+      const perfume = item.perfumeId ? await this.getPerfumeById(item.perfumeId) : null;
+      return { ...item, perfume };
+    }));
+    
+    return wishlistWithPerfumes;
+  }
+
+  async isInWishlist(userId: number, perfumeId: number): Promise<boolean> {
+    const [item] = await this.db
+      .select()
+      .from(wishlist)
+      .where(and(eq(wishlist.userId, userId), eq(wishlist.perfumeId, perfumeId)));
+    return !!item;
+  }
+
+  // Chat operations
+  async saveChatMessage(insertMessage: InsertChatMessage): Promise<ChatMessage> {
+    const [message] = await this.db
+      .insert(chatMessages)
+      .values(insertMessage)
+      .returning();
+    return message;
+  }
+
+  async getChatHistory(userId: number): Promise<ChatMessage[]> {
+    return await this.db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.userId, userId))
+;
+  }
+
+  // Preference test operations
+  async savePreferenceTest(insertTest: InsertPreferenceTest): Promise<PreferenceTest> {
+    const [test] = await this.db
+      .insert(preferenceTests)
+      .values(insertTest)
+      .returning();
+    return test;
+  }
+
+  async getPreferenceTestByUserId(userId: number): Promise<PreferenceTest | undefined> {
+    const [test] = await this.db
+      .select()
+      .from(preferenceTests)
+      .where(eq(preferenceTests.userId, userId));
+    return test;
+  }
+}
+
+// Temporarily use memory storage until DATABASE_URL is provided
+class MemStorage implements IStorage {
+  private users: Map<number, User> = new Map();
+  private perfumes: Map<number, Perfume> = new Map();
+  private recommendations: Map<number, Recommendation> = new Map();
+  private wishlistItems: Map<number, Wishlist> = new Map();
+  private chatMessages: Map<number, ChatMessage> = new Map();
+  private preferenceTests: Map<number, PreferenceTest> = new Map();
+  private currentUserId = 1;
+  private currentPerfumeId = 1;
+  private currentRecommendationId = 1;
+  private currentWishlistId = 1;
+  private currentChatId = 1;
+  private currentTestId = 1;
+
+  constructor() {
     this.initializeSampleData();
   }
 
   private initializeSampleData() {
-    const samplePerfumes: InsertPerfume[] = [
+    // Sample perfumes
+    const samplePerfumes = [
       {
         name: "Chance Eau Tendre",
         brand: "CHANEL",
@@ -85,7 +247,7 @@ export class MemStorage implements IStorage {
       },
       {
         name: "Neroli Portofino",
-        brand: "TOM FORD",
+        brand: "TOM FORD", 
         category: "우디",
         notes: ["네롤리", "베르가못", "앰버"],
         description: "지중해의 따뜻한 햇살을 담은 럭셔리한 향입니다.",
@@ -106,10 +268,21 @@ export class MemStorage implements IStorage {
     ];
 
     samplePerfumes.forEach(perfume => {
-      this.createPerfume(perfume);
+      const id = this.currentPerfumeId++;
+      this.perfumes.set(id, { ...perfume, id });
+    });
+
+    // Sample user
+    this.users.set(1, {
+      id: 1,
+      username: "demo_user",
+      email: "demo@weatherscent.com",
+      preferences: null,
+      createdAt: new Date()
     });
   }
 
+  // User operations
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
     const user: User = { 
@@ -134,12 +307,12 @@ export class MemStorage implements IStorage {
     const user = this.users.get(id);
     if (user) {
       user.preferences = preferences;
-      this.users.set(id, user);
       return user;
     }
     return undefined;
   }
 
+  // Perfume operations
   async createPerfume(insertPerfume: InsertPerfume): Promise<Perfume> {
     const id = this.currentPerfumeId++;
     const perfume: Perfume = { 
@@ -166,10 +339,10 @@ export class MemStorage implements IStorage {
     const perfume = this.perfumes.get(id);
     if (perfume) {
       perfume.views = (perfume.views || 0) + 1;
-      this.perfumes.set(id, perfume);
     }
   }
 
+  // Recommendation operations
   async createRecommendation(insertRecommendation: InsertRecommendation): Promise<Recommendation> {
     const id = this.currentRecommendationId++;
     const recommendation: Recommendation = { 
@@ -188,17 +361,19 @@ export class MemStorage implements IStorage {
   }
 
   async getRecommendationsByUserId(userId: number): Promise<Recommendation[]> {
-    return Array.from(this.recommendations.values()).filter(rec => rec.userId === userId);
+    return Array.from(this.recommendations.values())
+      .filter(rec => rec.userId === userId);
   }
 
   async getRecommendationsWithPerfumes(userId: number): Promise<any[]> {
-    const userRecommendations = await this.getRecommendationsByUserId(userId);
-    return Promise.all(userRecommendations.map(async rec => {
-      const perfume = await this.getPerfumeById(rec.perfumeId!);
+    const recs = await this.getRecommendationsByUserId(userId);
+    return Promise.all(recs.map(async (rec) => {
+      const perfume = rec.perfumeId ? await this.getPerfumeById(rec.perfumeId) : null;
       return { ...rec, perfume };
     }));
   }
 
+  // Wishlist operations
   async addToWishlist(insertWishlist: InsertWishlist): Promise<Wishlist> {
     const id = this.currentWishlistId++;
     const wishlistItem: Wishlist = { 
@@ -213,34 +388,34 @@ export class MemStorage implements IStorage {
   }
 
   async removeFromWishlist(userId: number, perfumeId: number): Promise<boolean> {
-    const items = Array.from(this.wishlistItems.entries());
-    for (const [id, item] of items) {
-      if (item.userId === userId && item.perfumeId === perfumeId) {
-        this.wishlistItems.delete(id);
-        return true;
-      }
+    const itemToRemove = Array.from(this.wishlistItems.entries())
+      .find(([, item]) => item.userId === userId && item.perfumeId === perfumeId);
+    if (itemToRemove) {
+      this.wishlistItems.delete(itemToRemove[0]);
+      return true;
     }
     return false;
   }
 
   async getWishlistByUserId(userId: number): Promise<Wishlist[]> {
-    return Array.from(this.wishlistItems.values()).filter(item => item.userId === userId);
+    return Array.from(this.wishlistItems.values())
+      .filter(item => item.userId === userId);
   }
 
   async getWishlistWithPerfumes(userId: number): Promise<any[]> {
     const wishlistItems = await this.getWishlistByUserId(userId);
-    return Promise.all(wishlistItems.map(async item => {
-      const perfume = await this.getPerfumeById(item.perfumeId!);
+    return Promise.all(wishlistItems.map(async (item) => {
+      const perfume = item.perfumeId ? await this.getPerfumeById(item.perfumeId) : null;
       return { ...item, perfume };
     }));
   }
 
   async isInWishlist(userId: number, perfumeId: number): Promise<boolean> {
-    return Array.from(this.wishlistItems.values()).some(
-      item => item.userId === userId && item.perfumeId === perfumeId
-    );
+    return Array.from(this.wishlistItems.values())
+      .some(item => item.userId === userId && item.perfumeId === perfumeId);
   }
 
+  // Chat operations
   async saveChatMessage(insertMessage: InsertChatMessage): Promise<ChatMessage> {
     const id = this.currentChatId++;
     const message: ChatMessage = { 
@@ -261,6 +436,7 @@ export class MemStorage implements IStorage {
       .sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
   }
 
+  // Preference test operations
   async savePreferenceTest(insertTest: InsertPreferenceTest): Promise<PreferenceTest> {
     const id = this.currentTestId++;
     const test: PreferenceTest = { 
@@ -275,8 +451,9 @@ export class MemStorage implements IStorage {
   }
 
   async getPreferenceTestByUserId(userId: number): Promise<PreferenceTest | undefined> {
-    return Array.from(this.preferenceTests.values()).find(test => test.userId === userId);
+    return Array.from(this.preferenceTests.values())
+      .find(test => test.userId === userId);
   }
 }
 
-export const storage = new MemStorage();
+export const storage = process.env.DATABASE_URL ? new SupabaseStorage() : new MemStorage();

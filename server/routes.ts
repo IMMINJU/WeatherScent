@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { getWeatherData, getWeatherMood } from "./services/weather";
-import { getWeatherBasedRecommendations, analyzePreferences, getChatResponse } from "./services/openai";
+import { getWeatherData } from "./services/weather";
+import { generateRecommendations } from "./services/recommendation";
 import { 
   insertUserSchema, 
   insertRecommendationSchema, 
@@ -311,5 +311,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+
+  // Weather endpoint for new flow
+  app.get("/api/weather", async (req, res) => {
+    try {
+      const { lat, lon } = req.query;
+      
+      if (!lat || !lon) {
+        return res.status(400).json({ message: "Latitude and longitude are required" });
+      }
+
+      const weatherData = await getWeatherData(Number(lat), Number(lon));
+      res.json(weatherData);
+    } catch (error) {
+      console.error("Weather API error:", error);
+      res.status(500).json({ message: "Failed to fetch weather data" });
+    }
+  });
+
+  // New recommendation endpoint
+  app.post("/api/recommendations", async (req, res) => {
+    try {
+      const recommendationData = req.body;
+      const result = await generateRecommendations(recommendationData);
+      res.json(result);
+    } catch (error) {
+      console.error("Recommendation error:", error);
+      res.status(500).json({ message: "Failed to generate recommendations" });
+    }
+  });
+
+  // Perfume detail endpoints
+  app.get("/api/perfumes/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const perfume = await storage.getPerfumeById(id);
+      
+      if (!perfume) {
+        return res.status(404).json({ message: "Perfume not found" });
+      }
+
+      res.json(perfume);
+    } catch (error) {
+      console.error("Error fetching perfume:", error);
+      res.status(500).json({ message: "Failed to fetch perfume" });
+    }
+  });
+
+  app.post("/api/perfumes/:id/view", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.updatePerfumeViews(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating views:", error);
+      res.status(500).json({ message: "Failed to update views" });
+    }
+  });
+
+  app.get("/api/perfumes/:id/similar", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const perfume = await storage.getPerfumeById(id);
+      
+      if (!perfume) {
+        return res.status(404).json({ message: "Perfume not found" });
+      }
+
+      const allPerfumes = await storage.getAllPerfumes();
+      const similar = allPerfumes
+        .filter(p => p.id !== id && p.category === perfume.category)
+        .slice(0, 3);
+
+      res.json(similar);
+    } catch (error) {
+      console.error("Error fetching similar perfumes:", error);
+      res.status(500).json({ message: "Failed to fetch similar perfumes" });
+    }
+  });
+
   return httpServer;
 }
