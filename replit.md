@@ -2,11 +2,23 @@
 
 ## Overview
 
-WeatherScent is a weather-based perfume recommendation platform that leverages AI and location data to provide personalized fragrance suggestions. The application combines real-time weather information with user preferences to create a unique perfume curation experience, enhanced by OpenAI-powered recommendations and local store integration.
+WeatherScent is a weather-based perfume recommendation platform that leverages AI and location data to provide personalized fragrance suggestions. The application combines real-time weather information with user preferences to create a unique perfume curation experience. The service uses a structured page flow (home → recommend → result → perfume detail → share) to provide personalized fragrance recommendations based on weather conditions, user preferences, and demographic information.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+## Recent Changes (January 22, 2025)
+
+✓ Implemented expanded MVP page structure with new routes:
+- `/` - Home page with hero section and CTA
+- `/recommend` - Detailed input form (gender, age, mood, purpose, scent preferences)
+- `/result/[uuid]` - AI recommendation results with weather context
+- `/perfume/[id]` - Detailed perfume information and similar suggestions
+✓ Added weather integration with mock data fallback
+✓ Created comprehensive recommendation flow with UUID-based sharing
+✓ Implemented memory storage with sample perfume data
+✓ Fixed unhandled promise rejections and error handling
 
 ## System Architecture
 

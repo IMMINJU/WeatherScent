@@ -53,17 +53,18 @@ export default function Result() {
       const stored = sessionStorage.getItem(`recommendation_${uuid}`);
       if (stored) {
         setResult(JSON.parse(stored));
+        setIsLoading(false);
       } else {
         // 공유된 링크의 경우 서버에서 가져오기 시도
         fetchSharedResult();
       }
     } catch (error) {
+      console.error("Load result error:", error);
       toast({
         title: "추천 결과를 불러올 수 없습니다",
         variant: "destructive"
       });
       setLocation("/");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -73,11 +74,14 @@ export default function Result() {
       const data = await apiRequest(`/api/recommendations/shared/${uuid}`);
       setResult(data);
     } catch (error) {
+      console.error("Fetch shared result error:", error);
       toast({
         title: "공유된 추천을 찾을 수 없습니다",
         variant: "destructive"
       });
       setLocation("/");
+    } finally {
+      setIsLoading(false);
     }
   };
 

@@ -7,6 +7,7 @@ import Home from "@/pages/home";
 import Recommend from "@/pages/recommend";
 import Result from "@/pages/result";
 import Perfume from "@/pages/perfume";
+import Chat from "@/pages/chat";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/recommend" component={Recommend} />
       <Route path="/result/:uuid" component={Result} />
       <Route path="/perfume/:id" component={Perfume} />
+      <Route path="/chat" component={Chat} />
       <Route component={NotFound} />
     </Switch>
   );

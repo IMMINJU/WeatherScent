@@ -107,19 +107,20 @@ export default function Recommend() {
       });
 
       // UUID 생성하여 결과 페이지로 이동
-      const uuid = crypto.randomUUID();
+      const uuid = result.id || crypto.randomUUID();
       sessionStorage.setItem(`recommendation_${uuid}`, JSON.stringify(result));
       setLocation(`/result/${uuid}`);
       
     } catch (error) {
+      console.error("Recommendation error:", error);
       toast({
         title: "추천 생성 중 오류가 발생했습니다",
         description: "잠시 후 다시 시도해주세요",
         variant: "destructive"
       });
+    } finally {
+      setIsGeneratingRecommendation(false);
     }
-    
-    setIsGeneratingRecommendation(false);
   };
 
   return (

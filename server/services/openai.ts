@@ -20,6 +20,109 @@ export interface ChatResponse {
   recommendations?: PerfumeRecommendation[];
 }
 
+interface PerfumeRecommendationInput {
+  weather: any;
+  preferences: {
+    gender?: string;
+    ageRange?: string;
+    mood?: string;
+    purpose?: string;
+    preferredScents?: string[];
+  };
+  availablePerfumes: any[];
+}
+
+export async function generatePerfumeRecommendation(input: PerfumeRecommendationInput) {
+  if (!process.env.OPENAI_API_KEY) {
+    // Return mock data when API key is not available
+    return {
+      moodText: `${input.weather?.temperature || 20}°C ${input.weather?.description || '좋은'} 날씨에 ${input.preferences.mood} 기분으로 보내는 하루를 위한 향수를 추천합니다.`,
+      summary: `${input.preferences.mood} 기분에 ${input.preferences.purpose} 목적으로 추천한 향수입니다.`,
+      recommendedPerfumes: input.availablePerfumes.slice(0, 3).map(perfume => ({
+        name: perfume.name,
+        brand: perfume.brand,
+        reason: `${input.preferences.mood} 기분에 잘 어울리는 ${perfume.category} 계열의 향수입니다.`
+      }))
+    };
+  }
+
+  const weatherContext = input.weather 
+    ? `현재 날씨: ${input.weather.temperature}°C, ${input.weather.description}, 위치: ${input.weather.location}`
+    : "날씨 정보 없음";
+
+  const preferencesText = [
+    input.preferences.gender && `성별: ${input.preferences.gender}`,
+    input.preferences.ageRange && `연령대: ${input.preferences.ageRange}`,
+    input.preferences.mood && `기분: ${input.preferences.mood}`,
+    input.preferences.purpose && `사용 목적: ${input.preferences.purpose}`,
+    input.preferences.preferredScents?.length && `선호 향: ${input.preferences.preferredScents.join(', ')}`
+  ].filter(Boolean).join('\n');
+
+  const availablePerfumesText = input.availablePerfumes.map(p => 
+    `${p.name} by ${p.brand} - ${p.category} (노트: ${p.notes.join(', ')})`
+  ).join('\n');
+
+  const prompt = `당신은 전문 향수 큐레이터입니다. 다음 정보를 바탕으로 향수를 추천해주세요:
+
+${weatherContext}
+
+사용자 정보:
+${preferencesText}
+
+사용 가능한 향수 목록:
+${availablePerfumesText}
+
+다음 JSON 형식으로 응답해주세요:
+{
+  "moodText": "날씨와 기분에 맞는 감성적인 한 줄 문구",
+  "summary": "추천 요약",
+  "recommendedPerfumes": [
+    {
+      "name": "향수명",
+      "brand": "브랜드명", 
+      "reason": "이 향수를 추천하는 구체적인 이유 (날씨, 기분, 목적과 연관지어)"
+    }
+  ]
+}
+
+최대 3개의 향수를 추천하고, 각 추천 이유는 구체적이고 감성적으로 작성해주세요.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [
+        {
+          role: "system",
+          content: "당신은 전문적인 향수 큐레이터로서, 사용자의 기분과 날씨에 맞는 향수를 감성적으로 추천합니다. 항상 JSON 형식으로 응답해야 합니다."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+      max_tokens: 1500
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || '{}');
+    return result;
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    
+    // Fallback response
+    return {
+      moodText: `${input.weather?.temperature || 20}°C ${input.weather?.description || '좋은'} 날씨에 ${input.preferences.mood} 기분으로 보내는 하루를 위한 향수를 추천합니다.`,
+      summary: `${input.preferences.mood} 기분에 ${input.preferences.purpose} 목적으로 추천한 향수입니다.`,
+      recommendedPerfumes: input.availablePerfumes.slice(0, 3).map(perfume => ({
+        name: perfume.name,
+        brand: perfume.brand,
+        reason: `${input.preferences.mood} 기분에 잘 어울리는 ${perfume.category} 계열의 향수입니다.`
+      }))
+    };
+  }
+}
+
 export async function getWeatherBasedRecommendations(
   weatherData: any,
   userPreferences?: any
