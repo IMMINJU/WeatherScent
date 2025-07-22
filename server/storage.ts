@@ -115,7 +115,8 @@ export class MemStorage implements IStorage {
     const user: User = { 
       ...insertUser, 
       id,
-      createdAt: new Date()
+      createdAt: new Date(),
+      preferences: insertUser.preferences || null
     };
     this.users.set(id, user);
     return user;
@@ -141,7 +142,14 @@ export class MemStorage implements IStorage {
 
   async createPerfume(insertPerfume: InsertPerfume): Promise<Perfume> {
     const id = this.currentPerfumeId++;
-    const perfume: Perfume = { ...insertPerfume, id };
+    const perfume: Perfume = { 
+      ...insertPerfume, 
+      id,
+      image: insertPerfume.image || null,
+      description: insertPerfume.description || null,
+      rating: insertPerfume.rating || null,
+      views: insertPerfume.views || null
+    };
     this.perfumes.set(id, perfume);
     return perfume;
   }
@@ -167,7 +175,13 @@ export class MemStorage implements IStorage {
     const recommendation: Recommendation = { 
       ...insertRecommendation, 
       id,
-      createdAt: new Date()
+      createdAt: new Date(),
+      userId: insertRecommendation.userId || null,
+      perfumeId: insertRecommendation.perfumeId || null,
+      temperature: insertRecommendation.temperature || null,
+      weatherCondition: insertRecommendation.weatherCondition || null,
+      reason: insertRecommendation.reason || null,
+      moodText: insertRecommendation.moodText || null
     };
     this.recommendations.set(id, recommendation);
     return recommendation;
@@ -190,7 +204,9 @@ export class MemStorage implements IStorage {
     const wishlistItem: Wishlist = { 
       ...insertWishlist, 
       id,
-      createdAt: new Date()
+      createdAt: new Date(),
+      userId: insertWishlist.userId || null,
+      perfumeId: insertWishlist.perfumeId || null
     };
     this.wishlistItems.set(id, wishlistItem);
     return wishlistItem;
@@ -230,7 +246,10 @@ export class MemStorage implements IStorage {
     const message: ChatMessage = { 
       ...insertMessage, 
       id,
-      createdAt: new Date()
+      createdAt: new Date(),
+      userId: insertMessage.userId || null,
+      response: insertMessage.response || null,
+      isUser: insertMessage.isUser !== undefined ? insertMessage.isUser : null
     };
     this.chatMessages.set(id, message);
     return message;
@@ -247,7 +266,9 @@ export class MemStorage implements IStorage {
     const test: PreferenceTest = { 
       ...insertTest, 
       id,
-      completedAt: new Date()
+      completedAt: new Date(),
+      userId: insertTest.userId || null,
+      results: insertTest.results || null
     };
     this.preferenceTests.set(id, test);
     return test;

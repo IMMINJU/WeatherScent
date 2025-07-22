@@ -10,7 +10,7 @@ interface HeaderProps {
 export default function Header({ currentUser, onStartPreferenceTest, onToggleChat }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const { data: wishlist = [] } = useQuery({
+  const { data: wishlist = [] } = useQuery<any[]>({
     queryKey: ["/api/wishlist", currentUser],
     enabled: !!currentUser,
   });

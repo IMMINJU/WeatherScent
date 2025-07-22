@@ -22,7 +22,7 @@ export default function Recommendations({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: wishlist = [] } = useQuery({
+  const { data: wishlist = [] } = useQuery<any[]>({
     queryKey: ["/api/wishlist", currentUser],
     enabled: !!currentUser,
   });
